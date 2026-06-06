@@ -1,0 +1,76 @@
+name: Build WASM and Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+          cache-dependency-path: go_engine/go.sum
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.3'
+          channel: 'stable'
+          cache: true
+
+      - name: Install Go dependencies
+        working-directory: go_engine
+        run: go mod download
+
+      - name: Build Go WASM engine
+        working-directory: go_engine
+        run: |
+          GOOS=js GOARCH=wasm go build \
+            -o ../flutter_app/assets/go_engine.wasm \
+            ./cmd/wasm/
+
+      - name: Copy wasm_exec.js from Go runtime
+        run: |
+          cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" \
+             flutter_app/web/wasm_exec.js
+
+      - name: Get Flutter dependencies
+        working-directory: flutter_app
+        run: flutter pub get
+
+      - name: Build Flutter Web
+        working-directory: flutter_app
+        run: |
+          flutter build web \
+            --release \
+            --base-href "/ledgerlite_pro/"
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: flutter_app/build/web
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
