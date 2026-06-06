@@ -5,12 +5,6 @@ import '../../core/bridge/wasm_bridge.dart';
 import '../../shared/widgets/hash_badge.dart';
 import '../../shared/widgets/integrity_chip.dart';
 
-/// VerifierScreen — the Go WASM-powered browser verifier.
-///
-/// On Flutter Web: uses the Go WASM engine to verify receipt JSON.
-/// On mobile: shows instructions to open the web verifier URL.
-///
-/// Hosted at: https://muaaztasawar.github.io/ledgerlite_pro
 class VerifierScreen extends StatefulWidget {
   const VerifierScreen({super.key});
 
@@ -44,10 +38,9 @@ class _VerifierScreenState extends State<VerifierScreen> {
     });
 
     try {
-      // Parse the receipt JSON
-      final receiptMap = jsonDecode(input) as Map<String, dynamic>;
+      final receiptMap =
+          jsonDecode(input) as Map<String, dynamic>;
 
-      // Determine receipt type
       final hasEntries = receiptMap.containsKey('entries');
       final hasEntry = receiptMap.containsKey('entry');
 
@@ -70,7 +63,6 @@ class _VerifierScreenState extends State<VerifierScreen> {
           receiptMap['merkle_root'] as String? ?? '';
 
       if (WasmBridge.instance.isAvailable) {
-        // Flutter Web — use Go WASM
         final wasmResult =
             await WasmBridge.instance.verifyReceiptJSON(input);
         setState(() {
@@ -90,7 +82,6 @@ class _VerifierScreenState extends State<VerifierScreen> {
           _isVerifying = false;
         });
       } else {
-        // Mobile — do basic structural check
         final entries = hasEntries
             ? (receiptMap['entries'] as List?)?.length ?? 0
             : 1;
@@ -104,7 +95,8 @@ class _VerifierScreenState extends State<VerifierScreen> {
             exportedAt: exportedAt,
             failReason: '',
             durationMs: 0,
-            engine: 'Structural check (open on web for full crypto verify)',
+            engine:
+                'Structural check — open on web for full crypto verify',
           );
           _isVerifying = false;
         });
@@ -142,9 +134,11 @@ class _VerifierScreenState extends State<VerifierScreen> {
                     height: 18,
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.white))
-                : const Icon(Icons.verified_user_rounded, size: 18),
-            label: Text(
-                _isVerifying ? 'Verifying...' : 'Verify Receipt'),
+                : const Icon(Icons.verified_user_rounded,
+                    size: 18),
+            label: Text(_isVerifying
+                ? 'Verifying...'
+                : 'Verify Receipt'),
           ),
           const SizedBox(height: 24),
           _buildWebNote(),
@@ -181,8 +175,8 @@ class _VerifierScreenState extends State<VerifierScreen> {
                 style: Theme.of(context).textTheme.labelLarge),
             TextButton.icon(
               onPressed: () async {
-                final data =
-                    await Clipboard.getData(Clipboard.kTextPlain);
+                final data = await Clipboard.getData(
+                    Clipboard.kTextPlain);
                 if (data?.text != null) {
                   _jsonCtrl.text = data!.text!;
                 }
@@ -215,7 +209,8 @@ class _VerifierScreenState extends State<VerifierScreen> {
         color: const Color(0xFFD7263D).withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-            color: const Color(0xFFD7263D).withValues(alpha: 0.3)),
+            color:
+                const Color(0xFFD7263D).withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -243,12 +238,12 @@ class _VerifierScreenState extends State<VerifierScreen> {
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
+        border:
+            Border.all(color: color.withValues(alpha: 0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Status row
           Row(
             children: [
               Icon(
@@ -289,20 +284,33 @@ class _VerifierScreenState extends State<VerifierScreen> {
           const Divider(),
           const SizedBox(height: 12),
 
-          // Details
+          // ── Details — each row uses named widget: param ──
           if (r.merchantName.isNotEmpty)
-            _resultRow('Merchant', r.merchantName),
+            _resultRow(
+              label: 'Merchant',
+              value: r.merchantName,
+            ),
           if (r.merchantPub.isNotEmpty)
-            _resultRow('Public key',
-                widget: HashBadge(
-                    hash: r.merchantPub, label: 'Pub')),
+            _resultRow(
+              label: 'Public key',
+              child: HashBadge(
+                  hash: r.merchantPub, label: 'Pub'),
+            ),
           if (r.merkleRoot.isNotEmpty)
-            _resultRow('Merkle root',
-                widget: HashBadge(
-                    hash: r.merkleRoot, label: 'Root')),
+            _resultRow(
+              label: 'Merkle root',
+              child: HashBadge(
+                  hash: r.merkleRoot, label: 'Root'),
+            ),
           if (r.exportedAt.isNotEmpty)
-            _resultRow('Exported', r.exportedAt),
-          _resultRow('Engine', r.engine),
+            _resultRow(
+              label: 'Exported',
+              value: r.exportedAt,
+            ),
+          _resultRow(
+            label: 'Engine',
+            value: r.engine,
+          ),
 
           const SizedBox(height: 12),
           IntegrityChip(
@@ -318,8 +326,13 @@ class _VerifierScreenState extends State<VerifierScreen> {
     );
   }
 
-  Widget _resultRow(String label,
-      {String? value, Widget? widget}) {
+  /// All params are named — no positional argument ambiguity.
+  /// Provide either [value] (String) or [child] (Widget), not both.
+  Widget _resultRow({
+    required String label,
+    String? value,
+    Widget? child,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
@@ -327,20 +340,23 @@ class _VerifierScreenState extends State<VerifierScreen> {
         children: [
           SizedBox(
             width: 80,
-            child: Text(label,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(fontWeight: FontWeight.w600)),
+            child: Text(
+              label,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: widget ??
-                Text(value ?? '',
-                    style:
-                        Theme.of(context).textTheme.bodySmall,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis),
+            child: child ??
+                Text(
+                  value ?? '',
+                  style: Theme.of(context).textTheme.bodySmall,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
           ),
         ],
       ),
@@ -354,7 +370,8 @@ class _VerifierScreenState extends State<VerifierScreen> {
         color: const Color(0xFF6B7FD7).withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-            color: const Color(0xFF6B7FD7).withValues(alpha: 0.2)),
+            color: const Color(0xFF6B7FD7)
+                .withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -379,9 +396,9 @@ class _VerifierScreenState extends State<VerifierScreen> {
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
-          SelectableText(
+          const SelectableText(
             'https://muaaztasawar.github.io/ledgerlite_pro',
-            style: const TextStyle(
+            style: TextStyle(
               color: Color(0xFF6B7FD7),
               fontSize: 12,
               fontWeight: FontWeight.w600,
