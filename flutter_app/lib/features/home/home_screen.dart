@@ -8,6 +8,7 @@ import '../entry/add_entry_screen.dart';
 import '../entry/entry_card.dart';
 import '../verify/verify_screen.dart';
 import 'home_controller.dart';
+import '../../core/services/ots_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -369,7 +370,142 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     );
   }
+  Future<void> _showAnchorDialog(BuildContext context) async {
+    final ledger = context.read<LedgerService>();
+    final ots = context.read<OtsService>();
 
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Computing Merkle root...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final summary = await ledger.summary();
+      if (!mounted) return;
+      Navigator.pop(context); // close loading dialog
+
+      if (summary.totalEntries == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No entries to anchor yet'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      if (summary.isAnchored) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Current chain already anchored'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      // Show confirm dialog
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Anchor to Bitcoin?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'This will submit your Merkle root to '
+                'OpenTimestamps (free). Bitcoin confirmation '
+                'takes ~1 hour.',
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Entries: ${summary.totalEntries}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Anchor'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true || !mounted) return;
+
+      // Show anchoring progress
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Submitting to OpenTimestamps...'),
+            ],
+          ),
+        ),
+      );
+
+      final result = await ots.stampHash(summary.merkleRoot);
+      if (!mounted) return;
+      Navigator.pop(context); // close progress dialog
+
+      if (result.success && result.proofBase64 != null) {
+        await ledger.saveAnchoredRoot(summary.merkleRoot);
+        _controller.refresh();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              '✓ Anchored! Bitcoin confirmation in ~1 hour.',
+            ),
+            backgroundColor: const Color(0xFF1B8A5A),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Anchoring failed: ${result.errorMessage ?? "unknown error"}'),
+            backgroundColor: const Color(0xFFD7263D),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: const Color(0xFFD7263D),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
   Widget _buildFab(BuildContext context) {
     return FloatingActionButton.extended(
       onPressed: () => Navigator.push(
